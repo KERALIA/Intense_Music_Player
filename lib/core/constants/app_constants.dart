@@ -1,0 +1,108 @@
+/// Current marketing version of the app (matches the `version` field in
+/// `pubspec.yaml`). Bump in lockstep with each release.
+const String kAppVersion = '0.20.2-beta.3';
+
+/// Current build number (matches the `version` `+N` suffix in
+/// `pubspec.yaml`). Bump whenever `kAppVersion` is bumped.
+const String kAppBuild = '19';
+
+/// Human-friendly version label, e.g. `0.20.2-beta.3 (build 19)`.
+const String kAppVersionLabel = '$kAppVersion (build $kAppBuild)';
+
+/// App-wide constants for Flick Player.
+class AppConstants {
+  AppConstants._();
+
+  // Animation durations – mutable so they can be zeroed out when animations
+  // are disabled.
+  static Duration animationFast = const Duration(milliseconds: 150);
+  static Duration animationNormal = const Duration(milliseconds: 300);
+  static Duration animationSlow = const Duration(milliseconds: 500);
+  static Duration animationVerySlow = const Duration(milliseconds: 800);
+
+  /// Enables or disables all app-wide animation durations.
+  static void setAnimationsEnabled(bool enabled) {
+    if (enabled) {
+      animationFast = const Duration(milliseconds: 150);
+      animationNormal = const Duration(milliseconds: 300);
+      animationSlow = const Duration(milliseconds: 500);
+      animationVerySlow = const Duration(milliseconds: 800);
+    } else {
+      animationFast = Duration.zero;
+      animationNormal = Duration.zero;
+      animationSlow = Duration.zero;
+      animationVerySlow = Duration.zero;
+    }
+  }
+
+  // Spacing values
+  static const double spacingXxs = 4.0;
+  static const double spacingXs = 8.0;
+  static const double spacingSm = 12.0;
+  static const double spacingMd = 16.0;
+  static const double spacingLg = 24.0;
+  static const double spacingXl = 32.0;
+  static const double spacingXxl = 48.0;
+
+  // Border radius values
+  static const double radiusXs = 4.0;
+  static const double radiusSm = 8.0;
+  static const double radiusMd = 12.0;
+  static const double radiusLg = 16.0;
+  static const double radiusXl = 24.0;
+  static const double radiusRound = 100.0;
+
+  // Glassmorphism settings
+  static const double glassBlurSigma = 15.0;
+  static const double glassBlurSigmaLight = 10.0;
+  static const double glassBlurSigmaStrong = 20.0;
+
+  // Orbit scroll settings
+  static const double orbitRadiusRatio = 1.0; // Large radius for gentle arc
+  static const double orbitCenterOffsetRatio = -0.5; // Center off-screen left
+  static const int orbitVisibleItems = 5; // Fewer items for more spacing
+  static const double orbitItemSpacing = 0.28; // Tighter space between songs
+  static const double orbitSelectedScale = 1.25;
+  static const double orbitAdjacentScale = 0.55;
+  static const double orbitDistantScale = 0.35;
+
+  // Navigation bar
+  static const double navBarHeight = 80.0;
+  static const double navBarIconSize = 28.0;
+  static const double navBarBottomPadding = 20.0;
+
+  // Song card
+  static const double songCardArtSize = 64.0;
+  static const double songCardArtSizeLarge = 100.0;
+
+  // Responsive base sizes (scaled by Responsive utility)
+  // Icons
+  static const double iconSizeXs = 12.0;
+  static const double iconSizeSm = 16.0;
+  static const double iconSizeMd = 20.0;
+  static const double iconSizeLg = 24.0;
+  static const double iconSizeXl = 32.0;
+
+  // Font sizes
+  static const double fontSizeXs = 10.0;
+  static const double fontSizeSm = 12.0;
+  static const double fontSizeMd = 14.0;
+  static const double fontSizeLg = 16.0;
+  static const double fontSizeXl = 20.0;
+  static const double fontSizeXxl = 24.0;
+  static const double fontSizeDisplay = 32.0;
+
+  // Card dimensions
+  static const double cardWidthSm = 100.0;
+  static const double cardWidthMd = 120.0;
+  static const double cardWidthLg = 160.0;
+  static const double cardHeightSm = 120.0;
+  static const double cardHeightMd = 160.0;
+  static const double cardHeightLg = 200.0;
+
+  // Container sizes
+  static const double containerSizeSm = 40.0;
+  static const double containerSizeMd = 48.0;
+  static const double containerSizeLg = 64.0;
+  static const double containerSizeXl = 72.0;
+}

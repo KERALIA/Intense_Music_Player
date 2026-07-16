@@ -1,0 +1,1208 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:intense_audio_player/services/equalizer_service.dart';
+
+enum EqMode { graphic, parametric }
+
+enum ParametricBandType {
+  peaking,
+  lowShelf,
+  highShelf,
+  lowPass,
+  highPass,
+  bandPass,
+  notch,
+  allPass,
+}
+
+extension ParametricBandTypeX on ParametricBandType {
+  String get displayName {
+    switch (this) {
+      case ParametricBandType.peaking:
+        return 'Peaking';
+      case ParametricBandType.lowShelf:
+        return 'Low Shelf';
+      case ParametricBandType.highShelf:
+        return 'High Shelf';
+      case ParametricBandType.lowPass:
+        return 'Low Pass';
+      case ParametricBandType.highPass:
+        return 'High Pass';
+      case ParametricBandType.bandPass:
+        return 'Band Pass';
+      case ParametricBandType.notch:
+        return 'Notch';
+      case ParametricBandType.allPass:
+        return 'All Pass';
+    }
+  }
+
+  bool get supportsGain {
+    switch (this) {
+      case ParametricBandType.peaking:
+      case ParametricBandType.lowShelf:
+      case ParametricBandType.highShelf:
+      case ParametricBandType.notch:
+        return true;
+      case ParametricBandType.lowPass:
+      case ParametricBandType.highPass:
+      case ParametricBandType.bandPass:
+      case ParametricBandType.allPass:
+        return false;
+    }
+  }
+
+  String get qLabel {
+    switch (this) {
+      case ParametricBandType.lowShelf:
+      case ParametricBandType.highShelf:
+        return 'Slope';
+      case ParametricBandType.lowPass:
+      case ParametricBandType.highPass:
+      case ParametricBandType.bandPass:
+      case ParametricBandType.notch:
+      case ParametricBandType.allPass:
+        return 'Resonance';
+      case ParametricBandType.peaking:
+        return 'Q';
+    }
+  }
+}
+
+@immutable
+class CompressorSettings {
+  final bool enabled;
+  final double thresholdDb;
+  final double ratio;
+  final double attackMs;
+  final double releaseMs;
+  final double makeupGainDb;
+
+  const CompressorSettings({
+    this.enabled = false,
+    this.thresholdDb = -18.0,
+    this.ratio = 3.0,
+    this.attackMs = 12.0,
+    this.releaseMs = 140.0,
+    this.makeupGainDb = 0.0,
+  });
+
+  CompressorSettings copyWith({
+    bool? enabled,
+    double? thresholdDb,
+    double? ratio,
+    double? attackMs,
+    double? releaseMs,
+    double? makeupGainDb,
+  }) {
+    return CompressorSettings(
+      enabled: enabled ?? this.enabled,
+      thresholdDb: thresholdDb ?? this.thresholdDb,
+      ratio: ratio ?? this.ratio,
+      attackMs: attackMs ?? this.attackMs,
+      releaseMs: releaseMs ?? this.releaseMs,
+      makeupGainDb: makeupGainDb ?? this.makeupGainDb,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'thresholdDb': thresholdDb,
+    'ratio': ratio,
+    'attackMs': attackMs,
+    'releaseMs': releaseMs,
+    'makeupGainDb': makeupGainDb,
+  };
+
+  factory CompressorSettings.fromJson(Map<String, dynamic> json) =>
+      CompressorSettings(
+        enabled: (json['enabled'] as bool?) ?? false,
+        thresholdDb: (json['thresholdDb'] as num?)?.toDouble() ?? -18.0,
+        ratio: (json['ratio'] as num?)?.toDouble() ?? 3.0,
+        attackMs: (json['attackMs'] as num?)?.toDouble() ?? 12.0,
+        releaseMs: (json['releaseMs'] as num?)?.toDouble() ?? 140.0,
+        makeupGainDb: (json['makeupGainDb'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+@immutable
+class LimiterSettings {
+  final bool enabled;
+  final double inputGainDb;
+  final double ceilingDb;
+  final double releaseMs;
+
+  const LimiterSettings({
+    this.enabled = false,
+    this.inputGainDb = 0.0,
+    this.ceilingDb = -0.8,
+    this.releaseMs = 80.0,
+  });
+
+  LimiterSettings copyWith({
+    bool? enabled,
+    double? inputGainDb,
+    double? ceilingDb,
+    double? releaseMs,
+  }) {
+    return LimiterSettings(
+      enabled: enabled ?? this.enabled,
+      inputGainDb: inputGainDb ?? this.inputGainDb,
+      ceilingDb: ceilingDb ?? this.ceilingDb,
+      releaseMs: releaseMs ?? this.releaseMs,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'inputGainDb': inputGainDb,
+    'ceilingDb': ceilingDb,
+    'releaseMs': releaseMs,
+  };
+
+  factory LimiterSettings.fromJson(Map<String, dynamic> json) =>
+      LimiterSettings(
+        enabled: (json['enabled'] as bool?) ?? false,
+        inputGainDb: (json['inputGainDb'] as num?)?.toDouble() ?? 0.0,
+        ceilingDb: (json['ceilingDb'] as num?)?.toDouble() ?? -0.8,
+        releaseMs: (json['releaseMs'] as num?)?.toDouble() ?? 80.0,
+      );
+}
+
+@immutable
+class FxSettings {
+  final bool enabled;
+  final double balance;
+  final double tempo;
+  final double damp;
+  final double filterHz;
+  final double delayMs;
+  final double size;
+  final double mix;
+  final double feedback;
+  final double width;
+
+  const FxSettings({
+    this.enabled = false,
+    this.balance = 0.0,
+    this.tempo = 1.0,
+    this.damp = 0.35,
+    this.filterHz = 6800.0,
+    this.delayMs = 240.0,
+    this.size = 0.55,
+    this.mix = 0.25,
+    this.feedback = 0.35,
+    this.width = 1.0,
+  });
+
+  FxSettings copyWith({
+    bool? enabled,
+    double? balance,
+    double? tempo,
+    double? damp,
+    double? filterHz,
+    double? delayMs,
+    double? size,
+    double? mix,
+    double? feedback,
+    double? width,
+  }) {
+    return FxSettings(
+      enabled: enabled ?? this.enabled,
+      balance: balance ?? this.balance,
+      tempo: tempo ?? this.tempo,
+      damp: damp ?? this.damp,
+      filterHz: filterHz ?? this.filterHz,
+      delayMs: delayMs ?? this.delayMs,
+      size: size ?? this.size,
+      mix: mix ?? this.mix,
+      feedback: feedback ?? this.feedback,
+      width: width ?? this.width,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'balance': balance,
+    'tempo': tempo,
+    'damp': damp,
+    'filterHz': filterHz,
+    'delayMs': delayMs,
+    'size': size,
+    'mix': mix,
+    'feedback': feedback,
+    'width': width,
+  };
+
+  factory FxSettings.fromJson(Map<String, dynamic> json) => FxSettings(
+    enabled: (json['enabled'] as bool?) ?? false,
+    balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+    tempo: (json['tempo'] as num?)?.toDouble() ?? 1.0,
+    damp: (json['damp'] as num?)?.toDouble() ?? 0.35,
+    filterHz: (json['filterHz'] as num?)?.toDouble() ?? 6800.0,
+    delayMs: (json['delayMs'] as num?)?.toDouble() ?? 240.0,
+    size: (json['size'] as num?)?.toDouble() ?? 0.55,
+    mix: (json['mix'] as num?)?.toDouble() ?? 0.25,
+    feedback: (json['feedback'] as num?)?.toDouble() ?? 0.35,
+    width: (json['width'] as num?)?.toDouble() ?? 1.0,
+  );
+}
+
+@immutable
+class ConvolverSettings {
+  final bool enabled;
+  final double mix; // 0..1 (wet amount)
+  final String? irPath; // stable path inside app docs dir, null = none loaded
+  final String? irDisplayName;
+
+  const ConvolverSettings({
+    this.enabled = false,
+    this.mix = 1.0,
+    this.irPath,
+    this.irDisplayName,
+  });
+
+  ConvolverSettings copyWith({
+    bool? enabled,
+    double? mix,
+    String? irPath,
+    String? irDisplayName,
+    bool clearIrPath = false,
+    bool clearIrDisplayName = false,
+  }) {
+    return ConvolverSettings(
+      enabled: enabled ?? this.enabled,
+      mix: mix ?? this.mix,
+      irPath: clearIrPath ? null : (irPath ?? this.irPath),
+      irDisplayName:
+          clearIrDisplayName ? null : (irDisplayName ?? this.irDisplayName),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'mix': mix,
+    'irPath': irPath,
+    'irDisplayName': irDisplayName,
+  };
+
+  factory ConvolverSettings.fromJson(Map<String, dynamic> json) =>
+      ConvolverSettings(
+        enabled: (json['enabled'] as bool?) ?? false,
+        mix: (json['mix'] as num?)?.toDouble() ?? 1.0,
+        irPath: json['irPath'] as String?,
+        irDisplayName: json['irDisplayName'] as String?,
+      );
+}
+
+@immutable
+class ParametricBand {
+  final bool enabled;
+  final double frequencyHz; // 20..20000
+  final double gainDb; // -12..+12 (UI only)
+  final double q; // 0.2..10
+  final ParametricBandType type;
+
+  const ParametricBand({
+    this.enabled = true,
+    required this.frequencyHz,
+    this.gainDb = 0.0,
+    this.q = 1.0,
+    this.type = ParametricBandType.peaking,
+  });
+
+  ParametricBand copyWith({
+    bool? enabled,
+    double? frequencyHz,
+    double? gainDb,
+    double? q,
+    ParametricBandType? type,
+  }) {
+    return ParametricBand(
+      enabled: enabled ?? this.enabled,
+      frequencyHz: frequencyHz ?? this.frequencyHz,
+      gainDb: gainDb ?? this.gainDb,
+      q: q ?? this.q,
+      type: type ?? this.type,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'frequencyHz': frequencyHz,
+    'gainDb': gainDb,
+    'q': q,
+    'type': type.name,
+  };
+
+  factory ParametricBand.fromJson(Map<String, dynamic> json) {
+    final typeName = (json['type'] as String?) ?? ParametricBandType.peaking.name;
+    final type = ParametricBandType.values.firstWhere(
+      (t) => t.name == typeName,
+      orElse: () => ParametricBandType.peaking,
+    );
+    return ParametricBand(
+      enabled: (json['enabled'] as bool?) ?? true,
+      frequencyHz: (json['frequencyHz'] as num?)?.toDouble() ?? 1000.0,
+      gainDb: (json['gainDb'] as num?)?.toDouble() ?? 0.0,
+      q: (json['q'] as num?)?.toDouble() ?? 1.0,
+      type: type,
+    );
+  }
+}
+
+const double _passFilterDepthDb = 12.0;
+
+double _sigmoid(double x) => 1.0 / (1.0 + math.exp(-x));
+
+double _bandSigma(double q) => (0.55 / q.clamp(0.2, 10.0)).clamp(0.04, 1.2);
+
+double parametricBandContributionDb({
+  required ParametricBand band,
+  required double hz,
+}) {
+  if (!band.enabled) return 0.0;
+
+  final safeHz = hz.clamp(20.0, 20000.0).toDouble();
+  final centerHz = band.frequencyHz.clamp(20.0, 20000.0).toDouble();
+  final sigma = _bandSigma(band.q);
+  final x = math.log(safeHz / centerHz);
+  final gaussian = math.exp(-(x * x) / (2.0 * sigma * sigma));
+
+  switch (band.type) {
+    case ParametricBandType.peaking:
+      return band.gainDb * gaussian;
+    case ParametricBandType.lowShelf:
+      return band.gainDb * _sigmoid(-x / sigma);
+    case ParametricBandType.highShelf:
+      return band.gainDb * _sigmoid(x / sigma);
+    case ParametricBandType.lowPass:
+      return -_passFilterDepthDb * _sigmoid(x / sigma);
+    case ParametricBandType.highPass:
+      return -_passFilterDepthDb * _sigmoid(-x / sigma);
+    case ParametricBandType.bandPass:
+      return -_passFilterDepthDb * (1.0 - gaussian);
+    case ParametricBandType.notch:
+      final depth = band.gainDb.abs().clamp(0.0, 12.0).toDouble();
+      return -depth * gaussian;
+    case ParametricBandType.allPass:
+      return 0.0;
+  }
+}
+
+double parametricResponseDbAtHz({
+  required double hz,
+  required List<ParametricBand> bands,
+  double minDb = -12.0,
+  double maxDb = 12.0,
+}) {
+  double sum = 0.0;
+  for (final band in bands) {
+    sum += parametricBandContributionDb(band: band, hz: hz);
+  }
+  return sum.clamp(minDb, maxDb).toDouble();
+}
+
+double parametricBandMarkerDb(ParametricBand band) {
+  return parametricBandContributionDb(
+    band: band,
+    hz: band.frequencyHz,
+  ).clamp(-12.0, 12.0).toDouble();
+}
+
+@immutable
+class EqualizerState {
+  final bool enabled;
+  final EqMode mode;
+  final double preampDb;
+
+  /// Graphic EQ band gains in dB (UI only).
+  final List<double> graphicGainsDb; // length = 10
+
+  /// Parametric bands (UI only).
+  /// Starts with 31 bands (1/3-octave ISO centers) up to a configurable maximum.
+  final List<ParametricBand> parametricBands;
+
+  /// Active preset name (optional display).
+  final String? activePresetName;
+
+  final double bassDb;
+  final double midDb;
+  final double trebleDb;
+
+  final CompressorSettings compressor;
+  final LimiterSettings limiter;
+  final FxSettings fx;
+  final ConvolverSettings convolver;
+
+  const EqualizerState({
+    this.enabled = true,
+    this.mode = EqMode.graphic,
+    this.preampDb = 0.0,
+    required this.graphicGainsDb,
+    required this.parametricBands,
+    this.activePresetName,
+    this.bassDb = 0.0,
+    this.midDb = 0.0,
+    this.trebleDb = 0.0,
+    this.compressor = const CompressorSettings(),
+    this.limiter = const LimiterSettings(),
+    this.fx = const FxSettings(),
+    this.convolver = const ConvolverSettings(),
+  });
+
+  EqualizerState copyWith({
+    bool? enabled,
+    EqMode? mode,
+    double? preampDb,
+    List<double>? graphicGainsDb,
+    List<ParametricBand>? parametricBands,
+    String? activePresetName,
+    double? bassDb,
+    double? midDb,
+    double? trebleDb,
+    CompressorSettings? compressor,
+    LimiterSettings? limiter,
+    FxSettings? fx,
+    ConvolverSettings? convolver,
+    bool clearActivePresetName = false,
+  }) {
+    return EqualizerState(
+      enabled: enabled ?? this.enabled,
+      mode: mode ?? this.mode,
+      preampDb: preampDb ?? this.preampDb,
+      graphicGainsDb: graphicGainsDb ?? this.graphicGainsDb,
+      parametricBands: parametricBands ?? this.parametricBands,
+      activePresetName: clearActivePresetName
+          ? null
+          : (activePresetName ?? this.activePresetName),
+      bassDb: bassDb ?? this.bassDb,
+      midDb: midDb ?? this.midDb,
+      trebleDb: trebleDb ?? this.trebleDb,
+      compressor: compressor ?? this.compressor,
+      limiter: limiter ?? this.limiter,
+      fx: fx ?? this.fx,
+      convolver: convolver ?? this.convolver,
+    );
+  }
+
+  static const List<double> defaultGraphicFrequenciesHz = <double>[
+    32,
+    64,
+    125,
+    250,
+    500,
+    1000,
+    2000,
+    4000,
+    8000,
+    16000,
+  ];
+
+  static const List<double> defaultParametricFrequenciesHz = <double>[
+    20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160,
+    200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
+    2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000,
+    20000,
+  ];
+
+  static EqualizerState initial() {
+    const defaultBands = 10;
+    return EqualizerState(
+      enabled: true,
+      mode: EqMode.graphic,
+      preampDb: 0.0,
+      graphicGainsDb: List<double>.filled(10, 0.0, growable: false),
+      parametricBands: List<ParametricBand>.generate(
+        defaultBands,
+        (i) => ParametricBand(frequencyHz: defaultParametricFrequenciesHz[i]),
+        growable: false,
+      ),
+      activePresetName: null,
+      compressor: const CompressorSettings(),
+      limiter: const LimiterSettings(),
+      fx: const FxSettings(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'mode': mode.name,
+    'preampDb': preampDb,
+    'graphicGainsDb': graphicGainsDb,
+    'parametricBands': parametricBands.map((b) => b.toJson()).toList(),
+    'activePresetName': activePresetName,
+    'bassDb': bassDb,
+    'midDb': midDb,
+    'trebleDb': trebleDb,
+    'compressor': compressor.toJson(),
+    'limiter': limiter.toJson(),
+    'fx': fx.toJson(),
+    'convolver': convolver.toJson(),
+  };
+
+  factory EqualizerState.fromJson(Map<String, dynamic> json) {
+    final modeName = (json['mode'] as String?) ?? EqMode.graphic.name;
+    final mode = EqMode.values.firstWhere(
+      (m) => m.name == modeName,
+      orElse: () => EqMode.graphic,
+    );
+
+    final gains = (json['graphicGainsDb'] as List<dynamic>? ?? const [])
+        .map((e) => (e as num).toDouble())
+        .toList(growable: false);
+
+    final bandsJson = (json['parametricBands'] as List<dynamic>? ?? const []);
+    final bands = bandsJson
+        .map((e) => ParametricBand.fromJson(e as Map<String, dynamic>))
+        .toList(growable: false);
+
+    final compJson = (json['compressor'] as Map<String, dynamic>?);
+    final limJson = (json['limiter'] as Map<String, dynamic>?);
+    final fxJson = (json['fx'] as Map<String, dynamic>?);
+    final convolverJson = (json['convolver'] as Map<String, dynamic>?);
+
+    return EqualizerState(
+      enabled: (json['enabled'] as bool?) ?? true,
+      mode: mode,
+      preampDb: (json['preampDb'] as num?)?.toDouble() ?? 0.0,
+      graphicGainsDb: gains.isEmpty
+          ? List<double>.filled(10, 0.0, growable: false)
+          : gains,
+      parametricBands: bands.isEmpty
+          ? List<ParametricBand>.generate(
+              10,
+              (i) => ParametricBand(
+                frequencyHz: defaultParametricFrequenciesHz[i],
+              ),
+              growable: false,
+            )
+          : bands,
+      activePresetName: json['activePresetName'] as String?,
+      bassDb: (json['bassDb'] as num?)?.toDouble() ?? 0.0,
+      midDb: (json['midDb'] as num?)?.toDouble() ?? 0.0,
+      trebleDb: (json['trebleDb'] as num?)?.toDouble() ?? 0.0,
+      compressor: compJson != null
+          ? CompressorSettings.fromJson(compJson)
+          : const CompressorSettings(),
+      limiter: limJson != null
+          ? LimiterSettings.fromJson(limJson)
+          : const LimiterSettings(),
+      fx: fxJson != null ? FxSettings.fromJson(fxJson) : const FxSettings(),
+      convolver: convolverJson != null
+          ? ConvolverSettings.fromJson(convolverJson)
+          : const ConvolverSettings(),
+    );
+  }
+}
+
+/// Notifies graph painter to repaint without broad rebuilds.
+class EqGraphRepaintController extends ChangeNotifier {
+  void bump() => notifyListeners();
+}
+
+final eqGraphRepaintControllerProvider = Provider<EqGraphRepaintController>((
+  ref,
+) {
+  final controller = EqGraphRepaintController();
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+class EqualizerNotifier extends Notifier<EqualizerState> {
+  static const double gainMinDb = -12.0;
+  static const double gainMaxDb = 12.0;
+  static const double preampMinDb = -24.0;
+  static const double preampMaxDb = 24.0;
+  static const double compressorThresholdMinDb = -36.0;
+  static const double compressorThresholdMaxDb = 0.0;
+  static const double compressorRatioMin = 1.0;
+  static const double compressorRatioMax = 12.0;
+  static const double compressorAttackMinMs = 1.0;
+  static const double compressorAttackMaxMs = 100.0;
+  static const double compressorReleaseMinMs = 20.0;
+  static const double compressorReleaseMaxMs = 500.0;
+  static const double limiterInputGainMinDb = 0.0;
+  static const double limiterInputGainMaxDb = 12.0;
+  static const double limiterCeilingMinDb = -12.0;
+  static const double limiterCeilingMaxDb = 0.0;
+  static const double limiterReleaseMinMs = 20.0;
+  static const double limiterReleaseMaxMs = 300.0;
+  static const double fxBalanceMin = -1.0;
+  static const double fxBalanceMax = 1.0;
+  static const double fxTempoMin = 0.5;
+  static const double fxTempoMax = 2.0;
+  static const double fxDampMin = 0.0;
+  static const double fxDampMax = 1.0;
+  static const double fxFilterMinHz = 200.0;
+  static const double fxFilterMaxHz = 18000.0;
+  static const double fxDelayMinMs = 10.0;
+  static const double fxDelayMaxMs = 1600.0;
+  static const double fxSizeMin = 0.0;
+  static const double fxSizeMax = 1.0;
+  static const double fxMixMin = 0.0;
+  static const double fxMixMax = 1.0;
+  static const double fxFeedbackMin = 0.0;
+  static const double fxFeedbackMax = 0.95;
+  static const double fxWidthMin = 0.0;
+  static const double fxWidthMax = 2.0;
+  static const double convolverMixMin = 0.0;
+  static const double convolverMixMax = 1.0;
+  static const int maxParametricBands = 31;
+
+  static const String _eqStateKey = 'eq_state_v1';
+
+  @override
+  EqualizerState build() {
+    final initialState = EqualizerState.initial();
+    Future(() async {
+      final saved = await _loadPersisted();
+      if (saved != null) {
+        state = saved;
+      }
+      await applyEqualizer(state);
+      final ir = state.convolver.irPath;
+      if (ir != null && ir.isNotEmpty) {
+        try {
+          await loadConvolverIr(ir);
+        } catch (_) {}
+      }
+      ref.read(eqGraphRepaintControllerProvider).bump();
+    });
+    return initialState;
+  }
+
+  void _syncToAudio() {
+    applyEqualizer(state).ignore();
+    _persist();
+  }
+
+  Future<EqualizerState?> _loadPersisted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_eqStateKey);
+      if (raw == null || raw.isEmpty) return null;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return EqualizerState.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _persist() {
+    final current = state;
+    Future(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_eqStateKey, jsonEncode(current.toJson()));
+      } catch (_) {}
+    });
+  }
+
+  void setEnabled(bool value) {
+    state = state.copyWith(enabled: value);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setMode(EqMode mode) {
+    if (state.mode == mode) return;
+    state = state.copyWith(mode: mode);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setGraphicGainDb(int index, double gainDb) {
+    final clamped = gainDb.clamp(gainMinDb, gainMaxDb).toDouble();
+    final next = List<double>.of(state.graphicGainsDb);
+    next[index] = clamped;
+    state = state.copyWith(graphicGainsDb: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setPreamp(double value) {
+    final clamped = value.clamp(preampMinDb, preampMaxDb).toDouble();
+    if (state.preampDb == clamped) return;
+    state = state.copyWith(preampDb: clamped, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setBassDb(double value) {
+    final clamped = value.clamp(gainMinDb, gainMaxDb).toDouble();
+    if (state.bassDb == clamped) return;
+    state = state.copyWith(bassDb: clamped, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setMidDb(double value) {
+    final clamped = value.clamp(gainMinDb, gainMaxDb).toDouble();
+    if (state.midDb == clamped) return;
+    state = state.copyWith(midDb: clamped, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setTrebleDb(double value) {
+    final clamped = value.clamp(gainMinDb, gainMaxDb).toDouble();
+    if (state.trebleDb == clamped) return;
+    state = state.copyWith(trebleDb: clamped, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void resetGraphic() {
+    state = state.copyWith(
+      preampDb: 0.0,
+      graphicGainsDb: List<double>.filled(10, 0.0, growable: false),
+      clearActivePresetName: true,
+    );
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setParamBandEnabled(int index, bool enabled) {
+    final next = List<ParametricBand>.of(state.parametricBands);
+    next[index] = next[index].copyWith(enabled: enabled);
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setParamBandFreqHz(int index, double hz) {
+    final clamped = hz.clamp(20.0, 20000.0).toDouble();
+    final next = List<ParametricBand>.of(state.parametricBands);
+    next[index] = next[index].copyWith(frequencyHz: clamped);
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setParamBandGainDb(int index, double gainDb) {
+    final clamped = gainDb.clamp(gainMinDb, gainMaxDb).toDouble();
+    final next = List<ParametricBand>.of(state.parametricBands);
+    next[index] = next[index].copyWith(gainDb: clamped);
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setParamBandQ(int index, double q) {
+    final clamped = q.clamp(0.2, 10.0).toDouble();
+    final next = List<ParametricBand>.of(state.parametricBands);
+    next[index] = next[index].copyWith(q: clamped);
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setParamBandType(int index, ParametricBandType type) {
+    final next = List<ParametricBand>.of(state.parametricBands);
+    var updated = next[index].copyWith(type: type);
+    if (type == ParametricBandType.notch && updated.gainDb > 0.0) {
+      updated = updated.copyWith(gainDb: -updated.gainDb);
+    }
+    next[index] = updated;
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void resetParametric() {
+    state = state.copyWith(
+      preampDb: 0.0,
+      parametricBands: List<ParametricBand>.generate(
+        10,
+        (i) => ParametricBand(
+          frequencyHz: EqualizerState.defaultParametricFrequenciesHz[i],
+        ),
+        growable: false,
+      ),
+      clearActivePresetName: true,
+    );
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void setCompressorEnabled(bool enabled) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(enabled: enabled),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setCompressorThresholdDb(double thresholdDb) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(
+        thresholdDb: thresholdDb
+            .clamp(compressorThresholdMinDb, compressorThresholdMaxDb)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setCompressorRatio(double ratio) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(
+        ratio: ratio.clamp(compressorRatioMin, compressorRatioMax).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setCompressorAttackMs(double attackMs) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(
+        attackMs: attackMs
+            .clamp(compressorAttackMinMs, compressorAttackMaxMs)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setCompressorReleaseMs(double releaseMs) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(
+        releaseMs: releaseMs
+            .clamp(compressorReleaseMinMs, compressorReleaseMaxMs)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setCompressorMakeupGainDb(double makeupGainDb) {
+    state = state.copyWith(
+      compressor: state.compressor.copyWith(
+        makeupGainDb: makeupGainDb.clamp(gainMinDb, gainMaxDb).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setLimiterEnabled(bool enabled) {
+    state = state.copyWith(
+      limiter: state.limiter.copyWith(enabled: enabled),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setLimiterInputGainDb(double inputGainDb) {
+    state = state.copyWith(
+      limiter: state.limiter.copyWith(
+        inputGainDb: inputGainDb
+            .clamp(limiterInputGainMinDb, limiterInputGainMaxDb)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setLimiterCeilingDb(double ceilingDb) {
+    state = state.copyWith(
+      limiter: state.limiter.copyWith(
+        ceilingDb: ceilingDb
+            .clamp(limiterCeilingMinDb, limiterCeilingMaxDb)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setLimiterReleaseMs(double releaseMs) {
+    state = state.copyWith(
+      limiter: state.limiter.copyWith(
+        releaseMs: releaseMs
+            .clamp(limiterReleaseMinMs, limiterReleaseMaxMs)
+            .toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void resetDynamics() {
+    state = state.copyWith(
+      compressor: const CompressorSettings(),
+      limiter: const LimiterSettings(),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxEnabled(bool enabled) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(enabled: enabled),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxBalance(double balance) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        balance: balance.clamp(fxBalanceMin, fxBalanceMax).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxTempo(double tempo) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        tempo: tempo.clamp(fxTempoMin, fxTempoMax).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxDamp(double damp) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(damp: damp.clamp(fxDampMin, fxDampMax).toDouble()),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxFilterHz(double filterHz) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        filterHz: filterHz.clamp(fxFilterMinHz, fxFilterMaxHz).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxDelayMs(double delayMs) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        delayMs: delayMs.clamp(fxDelayMinMs, fxDelayMaxMs).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxSize(double size) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(size: size.clamp(fxSizeMin, fxSizeMax).toDouble()),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxMix(double mix) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(mix: mix.clamp(fxMixMin, fxMixMax).toDouble()),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxFeedback(double feedback) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        feedback: feedback.clamp(fxFeedbackMin, fxFeedbackMax).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setFxWidth(double width) {
+    state = state.copyWith(
+      fx: state.fx.copyWith(
+        width: width.clamp(fxWidthMin, fxWidthMax).toDouble(),
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void resetFx() {
+    state = state.copyWith(fx: const FxSettings(), clearActivePresetName: true);
+    _syncToAudio();
+  }
+
+  void setConvolverEnabled(bool enabled) {
+    state = state.copyWith(
+      convolver: state.convolver.copyWith(enabled: enabled),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setConvolverMix(double mix) {
+    final clamped = mix.clamp(convolverMixMin, convolverMixMax);
+    state = state.copyWith(
+      convolver: state.convolver.copyWith(mix: clamped),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void setConvolverIr(String path, String displayName) {
+    state = state.copyWith(
+      convolver: state.convolver.copyWith(
+        irPath: path,
+        irDisplayName: displayName,
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void clearConvolverIr() {
+    state = state.copyWith(
+      convolver: state.convolver.copyWith(
+        enabled: false,
+        clearIrPath: true,
+        clearIrDisplayName: true,
+      ),
+      clearActivePresetName: true,
+    );
+    _syncToAudio();
+  }
+
+  void addParametricBand() {
+    if (state.parametricBands.length >= maxParametricBands) {
+      return;
+    }
+
+    final current = state.parametricBands;
+    final existingFreqs =
+        current.map((b) => b.frequencyHz.round()).toSet();
+
+    // Try to pick the next unused frequency from the default ISO list
+    double suggested = 1000.0;
+    for (final f in EqualizerState.defaultParametricFrequenciesHz) {
+      if (!existingFreqs.contains(f.round())) {
+        suggested = f;
+        break;
+      }
+    }
+
+    final next = List<ParametricBand>.of(current)
+      ..add(ParametricBand(frequencyHz: suggested));
+
+    state = state.copyWith(parametricBands: next, clearActivePresetName: true);
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+
+  void applyPreset({
+    required String presetName,
+    required bool enabled,
+    required EqMode mode,
+    double preampDb = 0.0,
+    required List<double> graphicGainsDb,
+    required List<ParametricBand> parametricBands,
+    double bassDb = 0.0,
+    double midDb = 0.0,
+    double trebleDb = 0.0,
+    CompressorSettings compressor = const CompressorSettings(),
+    LimiterSettings limiter = const LimiterSettings(),
+    FxSettings fx = const FxSettings(),
+  }) {
+    state = state.copyWith(
+      enabled: enabled,
+      mode: mode,
+      preampDb: preampDb.clamp(preampMinDb, preampMaxDb).toDouble(),
+      graphicGainsDb: List<double>.of(graphicGainsDb, growable: false),
+      parametricBands: List<ParametricBand>.of(
+        parametricBands,
+        growable: false,
+      ),
+      activePresetName: presetName,
+      bassDb: bassDb.clamp(gainMinDb, gainMaxDb).toDouble(),
+      midDb: midDb.clamp(gainMinDb, gainMaxDb).toDouble(),
+      trebleDb: trebleDb.clamp(gainMinDb, gainMaxDb).toDouble(),
+      compressor: compressor,
+      limiter: limiter,
+      fx: fx,
+    );
+    ref.read(eqGraphRepaintControllerProvider).bump();
+    _syncToAudio();
+  }
+}
+
+final equalizerProvider = NotifierProvider<EqualizerNotifier, EqualizerState>(
+  EqualizerNotifier.new,
+);
+
+// ============================================================================
+// Granular selectors for smooth rebuilds
+// ============================================================================
+
+final eqEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.enabled));
+});
+
+final eqModeProvider = Provider<EqMode>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.mode));
+});
+
+final eqActivePresetNameProvider = Provider<String?>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.activePresetName));
+});
+
+final eqPreampDbProvider = Provider<double>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.preampDb));
+});
+
+final eqBassDbProvider = Provider<double>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.bassDb));
+});
+
+final eqMidDbProvider = Provider<double>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.midDb));
+});
+
+final eqTrebleDbProvider = Provider<double>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.trebleDb));
+});
+
+final eqGraphicGainDbProvider = Provider.family<double, int>((ref, index) {
+  return ref.watch(equalizerProvider.select((s) => s.graphicGainsDb[index]));
+});
+
+final eqParamBandProvider = Provider.family<ParametricBand, int>((ref, index) {
+  return ref.watch(equalizerProvider.select((s) => s.parametricBands[index]));
+});
+
+final eqCompressorProvider = Provider<CompressorSettings>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.compressor));
+});
+
+final eqLimiterProvider = Provider<LimiterSettings>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.limiter));
+});
+
+final eqFxProvider = Provider<FxSettings>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.fx));
+});
+
+final eqConvolverProvider = Provider<ConvolverSettings>((ref) {
+  return ref.watch(equalizerProvider.select((s) => s.convolver));
+});

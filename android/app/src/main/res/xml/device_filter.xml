@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android matches this filter against the USB device descriptor, not interface descriptors.
+  Many DACs expose class 0 (per-interface) at the device level, so this filter cannot guarantee
+  a system chooser for every audio DAC. Keep the runtime UsbManager path as the real fallback.
+-->
+<resources>
+    <usb-device class="1" />
+</resources>

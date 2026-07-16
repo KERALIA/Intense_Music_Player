@@ -1,0 +1,75 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# NDK libraries (auto-copied during build)
+/android/app/src/main/jniLibs/
+
+.env
+.env.local
+target/rust-analyzer/flycheck0/stderr.txt
+target/rust-analyzer/flycheck0/stdout.txt
+
+target/rust-analyzer/flycheck0/stderr
+target/rust-analyzer/flycheck0/stdout
+android/app/google-services.json
+android/app/src/main/assets/adi-registration.properties
+
+# Flutter tool logs
+flutter_*.log
+
+# Rust subcrate build artifacts (wavpack-sys)
+rust/vendor/*/target/
+rust/vendor/*/Cargo.lock
+
+# Gradle
+.gradle/
+android/local.properties
+
+# Node
+node_modules/
+
+# Graphify knowledge graph (regenerable via `graphify .`)
+graphify-out/
