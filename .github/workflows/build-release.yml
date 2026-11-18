@@ -50,6 +50,12 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Create fallback google-services.json if missing
+        run: |
+          if [ ! -f android/app/google-services.json ]; then
+            echo '{"project_info":{"project_number":"0","project_id":"flick-audio","storage_bucket":"flick-audio.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.intense.audioplayer"}},"oauth_client":[],"api_key":[{"current_key":"dummy"}],"services":{"analytics_service":{"status":1}}}]}' > android/app/google-services.json
+          fi
+
       - name: Build Universal Release APK (High Performance, Universal Compatibility)
         run: |
           mkdir -p dist
