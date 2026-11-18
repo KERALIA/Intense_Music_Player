@@ -184,21 +184,18 @@ tasks.register("copyNdkLibs") {
                 sourceLib.copyTo(outputLib, overwrite = true)
 
                 if (llvmStrip != null) {
-                    val sizeBeforeBytes = outputLib.length()
-                    val stripResult =
-                        project.exec {
-                            executable = llvmStrip
-                            args("--strip-debug", outputLib.absolutePath)
-                            isIgnoreExitValue = true
+                    try {
+                        val process = ProcessBuilder(llvmStrip, "--strip-debug", outputLib.absolutePath)
+                            .redirectErrorStream(true)
+                            .start()
+                        val exitCode = process.waitFor()
+                        if (exitCode == 0) {
+                            logger.lifecycle("Stripped libc++_shared.so for $abi")
+                        } else {
+                            logger.warn("Warning: failed to strip libc++_shared.so for $abi (exit code $exitCode)")
                         }
-
-                    if (stripResult.exitValue == 0) {
-                        val sizeAfterBytes = outputLib.length()
-                        logger.lifecycle(
-                            "Stripped libc++_shared.so for $abi: ${sizeBeforeBytes / 1024} KB -> ${sizeAfterBytes / 1024} KB",
-                        )
-                    } else {
-                        logger.warn("Warning: failed to strip libc++_shared.so for $abi")
+                    } catch (e: Exception) {
+                        logger.warn("Warning: failed to strip libc++_shared.so for $abi: ${e.message}")
                     }
                 } else {
                     logger.warn("Warning: llvm-strip not found on PATH; leaving libc++_shared.so unstripped for $abi")
