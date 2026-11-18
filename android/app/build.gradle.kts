@@ -31,6 +31,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     val hasReleaseKeystore = keystoreFile.exists() && !keystoreProperties.getProperty("storeFile").isNullOrBlank()
