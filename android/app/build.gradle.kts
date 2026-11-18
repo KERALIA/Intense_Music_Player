@@ -146,6 +146,13 @@ tasks.register("copyNdkLibs") {
             System.getenv("ANDROID_NDK_HOME")
                 ?: System.getenv("ANDROID_NDK_ROOT")
                 ?: ndkHomeFromLocalProperties()
+                ?: (System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT"))
+                    ?.let { File(it, "ndk") }
+                    ?.takeIf { it.exists() }
+                    ?.listFiles()
+                    ?.filter { it.isDirectory }
+                    ?.maxByOrNull { it.name }
+                    ?.absolutePath
                 ?: throw GradleException(
                     "ANDROID_NDK_HOME/ANDROID_NDK_ROOT is not set and no NDK could be resolved from local.properties",
                 )

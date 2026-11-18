@@ -38,19 +38,27 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
 
+      - name: Detect and export Android NDK
+        run: |
+          NDK_DIR=$(find "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$NDK_DIR" ] && [ -d "$NDK_DIR" ]; then
+            echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+            echo "ANDROID_NDK_ROOT=$NDK_DIR" >> $GITHUB_ENV
+            echo "Found Android NDK at: $NDK_DIR"
+          fi
+
       - name: Install Flutter Dependencies
         run: flutter pub get
 
       - name: Build Universal Release APK (High Performance, Universal Compatibility)
-        run: flutter build apk --release
-
-      - name: Build Split-per-ABI Release APKs (Smallest Size, Max Performance)
-        run: flutter build apk --release --split-per-abi
-
-      - name: Rename & Organize APKs
         run: |
           mkdir -p dist
+          flutter build apk --release
           cp build/app/outputs/flutter-apk/app-release.apk dist/Intense-Audio-Player-Universal-release.apk
+
+      - name: Build Split-per-ABI Release APKs (Smallest Size, Max Performance)
+        run: |
+          flutter build apk --release --split-per-abi
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/Intense-Audio-Player-arm64-v8a-release.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/Intense-Audio-Player-armeabi-v7a-release.apk
 
@@ -60,10 +68,11 @@ jobs:
           name: release-apks
           path: dist/*.apk
 
-      - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish to GitHub Releases Tab
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Latest Optimized Release' }}
           files: dist/*.apk
           generate_release_notes: true
           draft: false
