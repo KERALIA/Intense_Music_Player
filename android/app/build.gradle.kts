@@ -33,22 +33,15 @@ android {
     val hasReleaseKeystore = keystoreFile.exists() && !keystoreProperties.getProperty("storeFile").isNullOrBlank()
 
     signingConfigs {
-        create("release") {
-            if (hasReleaseKeystore) {
+        if (hasReleaseKeystore) {
+            create("release") {
                 storeFile = keystoreProperties.getProperty("storeFile")?.let { rootProject.file(it) }
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
-            } else {
-                signingConfigs.findByName("debug")?.let { debugConfig ->
-                    storeFile = debugConfig.storeFile
-                    storePassword = debugConfig.storePassword
-                    keyAlias = debugConfig.keyAlias
-                    keyPassword = debugConfig.keyPassword
-                }
+                enableV1Signing = true
+                enableV2Signing = true
             }
-            enableV1Signing = true
-            enableV2Signing = true
         }
     }
 
@@ -79,13 +72,11 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
