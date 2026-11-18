@@ -76,9 +76,21 @@ flutter run
 ```
 
 To compile the production-ready Android package:
+
 ```bash
+# Recommended: Compile split APKs per architecture (~25-35 MB each, zero lag):
+flutter build apk --release --split-per-abi
+
+# Or build Android App Bundle for Google Play Store (~20-30 MB download):
+flutter build appbundle --release
+
+# Fat APK containing all 4 architectures (larger size):
 flutter build apk --release
 ```
+
+> **Note on Performance & File Size:**
+> - Never distribute `app-debug.apk` (which is >130 MB and runs via the unoptimized Dart JIT runtime causing UI stutter/lag on phones).
+> - Always distribute the release APK (e.g. `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` for 64-bit phones), compiled with AOT native code, R8 minification, and stripped Rust binaries.
 
 ---
 
