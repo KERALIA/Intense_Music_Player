@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,9 +12,6 @@ val googleServicesJson = file("google-services.json")
 if (googleServicesJson.exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
-
-import java.io.File
-import java.util.Properties
 
 val keystoreProperties = Properties()
 val keystoreFile = rootProject.file("key.properties")
